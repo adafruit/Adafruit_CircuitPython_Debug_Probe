@@ -10,7 +10,7 @@ Implement pyocd DebugProbe API with native CircuitPython DigitalInOut for standa
 
 import digitalio
 import time
-
+from . import DebugProbe
 __version__ = "0.0.0+auto.0"
 __repo__ = "https://github.com/adafruit/Adafruit_CircuitPython_Debug_Probe.git"
 
@@ -19,13 +19,7 @@ SWD_ACK_OK = 0b001
 SWD_ACK_WAIT= 0b010
 SWD_ACK_FAULT = 0b100
 
-class PinGroup:
-    pass
-
-PROTOCOL_PINS = PinGroup()
-GPIO_PINS = PinGroup()
-
-class BitbangProbe:
+class BitbangProbe(DebugProbe):
     def __init__(self, clk, dio, nreset=None, drive_mode=digitalio.DriveMode.OPEN_DRAIN):
         self.clk = clk
         self.dio = dio
@@ -33,19 +27,18 @@ class BitbangProbe:
         self.drive_mode = drive_mode
 
     def get_accessible_pins(self, group: PinGroup) -> Tuple[int, int]:
-        if group == PROTOCOL_PINS:
+        if group == DebugProbe.PinGroup.PROTOCOL_PINS:
             accessible = 0x3 # swdio and swclk
             if self.nreset:
                 accessible |= 1 << 4
             return (accessible, accessible)
         return (0, 0)
 
-
     def read_pins(self, group: PinGroup, mask: int) -> int:
         raise NotImplementedError()
 
     def write_pins(self, group: PinGroup, mask: int, value: int) -> None:
-        if group != PROTOCOL_PINS:
+        if group != DebugProbe.PinGroup.PROTOCOL_PINS:
             raise NotImplementedError()
         for bit, pin in ((0, self.clk), (1, self.dio), (4, self.nreset)):
             if not pin or (mask & (1 << bit)) == 0:
@@ -57,14 +50,12 @@ class BitbangProbe:
         """@brief Initialize DAP IO pins for JTAG or SWD"""
         self.clk.switch_to_output(True, drive_mode=digitalio.DriveMode.PUSH_PULL)
         self.dio.switch_to_output(True, drive_mode=self.drive_mode)
-        self.reset()
 
     def disconnect(self) -> None:
         self.clk.switch_to_input()
         self.dio.switch_to_input()
         if self.nreset:
             self.nreset.switch_to_input()
-
 
     def _swd_write(self, bit_count, value):
         clk = self.clk
